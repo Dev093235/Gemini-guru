@@ -38,6 +38,8 @@ def download_audio():
             'restrictfilenames': True, # Keep filenames web-friendly
             'noplaylist': True,        # Download single video, not a playlist
             'nocheckcertificate': True, # Sometimes needed for HTTPS
+            # Yeh nayi line hai jo User-Agent add karti hai bot detection se bachne ke liye
+            'external_downloader_args': ['-user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36'],
         }
 
         try:
