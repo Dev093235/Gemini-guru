@@ -1,4 +1,4 @@
-# app.py file
+# app.py file (Updated for searching by name)
 
 from flask import Flask, request, send_file, jsonify
 import os
@@ -10,44 +10,45 @@ app = Flask(__name__)
 # Default route for the server
 @app.route('/')
 def home():
-    return "Hello! This is a simple audio downloader server for your college practical. Use the /download route to get an audio file."
+    return "Hello! This is a simple audio downloader server for your college practical. Use the /download?query=<song_name> route to search and download an audio file."
 
-# Route to download the audio
+# Route to search and download the audio by name
 @app.route('/download', methods=['GET'])
-def download_audio():
-    # Get the URL from the request parameters (e.g., /download?url=YOUR_VIDEO_URL)
-    video_url = request.args.get('url')
+def search_and_download_audio():
+    # 'query' parameter ko request arguments se lein. Jaise: /download?query=Diljit Dosanjh GOAT
+    search_query = request.args.get('query')
 
-    if not video_url:
-        return jsonify({"error": "Please provide a 'url' parameter in the request."}), 400
+    if not search_query:
+        return jsonify({"error": "Kripya 'query' parameter provide karein (gaane ka naam)."}), 400
+
+    # yt-dlp ko batane ke liye ki yeh search query hai, hum 'ytsearch:' prefix use karte hain
+    # 'ytsearch1:' ka matlab hai "search YouTube and take the first result"
+    yt_dlp_query = f"ytsearch1:{search_query}"
 
     # Create a temporary directory to store the downloaded file
-    # This is crucial for platforms like Render, where the file system is temporary.
     with tempfile.TemporaryDirectory() as tmpdir:
         output_template = os.path.join(tmpdir, '%(title)s.%(ext)s')
 
-        # yt-dlp options to download best audio and convert to MP3
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192', # Audio quality in kbps
+                'preferredquality': '192',
             }],
             'outtmpl': output_template,
-            'restrictfilenames': True, # Keep filenames web-friendly
-            'noplaylist': True,        # Download single video, not a playlist
-            'nocheckcertificate': True, # Sometimes needed for HTTPS
-            # Yeh nayi line hai jo User-Agent add karti hai bot detection se bachne ke liye
+            'restrictfilenames': True,
+            'noplaylist': True,
+            'nocheckcertificate': True,
             'external_downloader_args': ['-user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36'],
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(video_url, download=True)
+                # Ab hum seedhe search query ko pass kar rahe hain
+                info = ydl.extract_info(yt_dlp_query, download=True)
                 filename_without_ext = ydl.prepare_filename(info)
 
-                # Find the exact MP3 file path within the temporary directory
                 mp3_filepath = None
                 for file in os.listdir(tmpdir):
                     if file.startswith(os.path.basename(filename_without_ext)) and file.endswith('.mp3'):
@@ -55,29 +56,24 @@ def download_audio():
                         break
 
                 if not mp3_filepath or not os.path.exists(mp3_filepath):
-                    # Fallback: if MP3 not found, try to send any downloaded audio file
                     downloaded_files = [f for f in os.listdir(tmpdir) if os.path.isfile(os.path.join(tmpdir, f))]
                     audio_file = None
                     for f in downloaded_files:
-                        if f.endswith(('.mp3', '.m4a', '.webm', '.ogg')): # Check for common audio formats
+                        if f.endswith(('.mp3', '.m4a', '.webm', '.ogg')):
                             audio_file = os.path.join(tmpdir, f)
                             break
                     if audio_file:
                          return send_file(audio_file, as_attachment=True, mimetype='audio/mpeg')
                     else:
-                         return jsonify({"error": "Failed to download or find suitable audio file."}), 500
+                         return jsonify({"error": "Gaana download nahi ho paya ya MP3 file nahi mili."}), 500
 
-            # Send the downloaded MP3 file to the user
                 return send_file(mp3_filepath, as_attachment=True, mimetype='audio/mpeg')
 
         except Exception as e:
-            # Log the error for debugging (Render will show this in logs)
             print(f"Error during download: {e}")
-            return jsonify({"error": f"An error occurred during download: {str(e)}"}), 500
+            # Agar koi khas error ho bot detection ka to yahan bhi dikhega
+            return jsonify({"error": f"Gaana download karte waqt error: {str(e)}"}), 500
 
-# This ensures the server runs when the script is executed
 if __name__ == '__main__':
-    # Use PORT environment variable if available (for Render), otherwise default to 5000
     port = int(os.environ.get("PORT", 5000))
-    # host='0.0.0.0' allows the server to be accessible from outside the local machine
-    app.run(debug=False, host='0.0.0.0', port=port) # Set debug to False for production/deployment
+    app.run(debug=False, host='0.0.0.0', port=port)
