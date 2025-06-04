@@ -1,4 +1,4 @@
-# app.py file (Updated for searching by name)
+# app.py file (Updated for searching on archive.org)
 
 from flask import Flask, request, send_file, jsonify
 import os
@@ -10,22 +10,20 @@ app = Flask(__name__)
 # Default route for the server
 @app.route('/')
 def home():
-    return "Hello! This is a simple audio downloader server for your college practical. Use the /download?query=<song_name> route to search and download an audio file."
+    return "Hello! This is a simple audio downloader server for your college practical. Use the /download?query=<song_name> route to search and download an audio file from archive.org."
 
-# Route to search and download the audio by name
+# Route to search and download the audio by name from archive.org
 @app.route('/download', methods=['GET'])
 def search_and_download_audio():
-    # 'query' parameter ko request arguments se lein. Jaise: /download?query=Diljit Dosanjh GOAT
     search_query = request.args.get('query')
 
     if not search_query:
         return jsonify({"error": "Kripya 'query' parameter provide karein (gaane ka naam)."}), 400
 
-    # yt-dlp ko batane ke liye ki yeh search query hai, hum 'ytsearch:' prefix use karte hain
-    # 'ytsearch1:' ka matlab hai "search YouTube and take the first result"
-    yt_dlp_query = f"ytsearch1:{search_query}"
+    # Yahan hum 'archive.org:search:' prefix use kar rahe hain
+    # Isse yt-dlp archive.org par search karega aur pehla result lega
+    yt_dlp_query = f"archive.org:search:{search_query}" # Yahan badlav kiya gaya hai
 
-    # Create a temporary directory to store the downloaded file
     with tempfile.TemporaryDirectory() as tmpdir:
         output_template = os.path.join(tmpdir, '%(title)s.%(ext)s')
 
@@ -41,11 +39,15 @@ def search_and_download_audio():
             'noplaylist': True,
             'nocheckcertificate': True,
             'external_downloader_args': ['-user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36'],
+            'extractor_retries': 'auto',
+            # 'default_search': 'ytsearch', # Ab iski zaroorat nahi, hum explicitly archive.org search kar rahe hain
+            'no_warnings': True,
+            'quiet': True,
+            'skip_download': False
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Ab hum seedhe search query ko pass kar rahe hain
                 info = ydl.extract_info(yt_dlp_query, download=True)
                 filename_without_ext = ydl.prepare_filename(info)
 
@@ -71,7 +73,6 @@ def search_and_download_audio():
 
         except Exception as e:
             print(f"Error during download: {e}")
-            # Agar koi khas error ho bot detection ka to yahan bhi dikhega
             return jsonify({"error": f"Gaana download karte waqt error: {str(e)}"}), 500
 
 if __name__ == '__main__':
